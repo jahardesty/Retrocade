@@ -45,7 +45,11 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .sheet(item: $selectedGame) { game in
-            GameRunnerView(gameName: game)
+            if game == "Snake" {
+                SnakeGameView(gameName: game)
+            } else {
+                Text("Loading \(game)...")
+            }
         }
     }
     
@@ -105,37 +109,6 @@ struct ScanlineView: View {
             .stroke(Color.white.opacity(0.04), lineWidth: 1)
         }
         .allowsHitTesting(false)
-    }
-}
-
-// MARK: - GAME RUNNER CONTAINER
-struct GameRunnerView: View {
-    let gameName: String
-    @Environment(\.dismiss) var dismiss
-    
-    var body: some View {
-        ZStack {
-            Color.blue.ignoresSafeArea()
-            
-            VStack(spacing: 20) {
-                Text("RUNNING: \(gameName.uppercased())")
-                    .font(.system(.headline, design: .monospaced))
-                    .foregroundColor(.white)
-                
-                Text("[ Insert Game Logic Here ]")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.yellow)
-                
-                Button(action: { dismiss() }) {
-                    Text("ALT+F4: EXIT TO TERMINAL")
-                        .font(.system(.caption, design: .monospaced))
-                        .padding()
-                        .background(Color.white.opacity(0.2))
-                        .foregroundColor(.white)
-                        .cornerRadius(5)
-                }
-            }
-        }
     }
 }
 
