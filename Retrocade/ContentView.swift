@@ -18,7 +18,7 @@ struct ContentView: View {
         "LOADING CORE MEMORY....... OK",
         "CONNECTING TO DIAL-UP [56K]... OK",
         "READY.",
-        "\n--- SELECT A GAME ---"
+        
     ]
     
     var body: some View {
@@ -106,7 +106,7 @@ struct ScanlineView: View {
                     path.addLine(to: CGPoint(x: geo.size.width, y: y))
                 }
             }
-            .stroke(Color.white.opacity(0.04), lineWidth: 1)
+            .stroke(Color.white.opacity(0.07), lineWidth: 1)
         }
         .allowsHitTesting(false)
     }
