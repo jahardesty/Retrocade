@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-internal import Combine
+import Combine
 
 struct SnakeGameView: View {
     let gameName: String
@@ -28,10 +28,21 @@ struct SnakeGameView: View {
         case up, down, left, right
     }
     
+    // Calculates rotation angle for the snake head indicator arrow
+    var headRotation: Angle {
+        switch direction {
+        case .up:    return .degrees(0)
+        case .right: return .degrees(90)
+        case .down:  return .degrees(180)
+        case .left:  return .degrees(270)
+        }
+    }
+    
+    // MARK: DESIGN
     var body: some View {
         ZStack {
+            // GLOBAL BACKGROUND (Pure deep black)
             Color.black.ignoresSafeArea()
-            ScanlineView()
             
             VStack {
                 // TOP HEADER BAR
@@ -56,46 +67,73 @@ struct SnakeGameView: View {
                     let cellSize = min(geometry.size.width / CGFloat(columns), geometry.size.height / CGFloat(rows))
                     
                     ZStack(alignment: .topLeading) {
-                        // BACK LAYER: Black Grid Background
-                        Rectangle()
+                        // BACK LAYER: Black Grid Background with uniform rounded corners
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.black)
-                            .border(Color.green.opacity(0.3), width: 2)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.green.opacity(0.3), lineWidth: 2)
+                            )
                         
-                        // FOOD ITEM
+                        // FOOD ITEM (Crimson Pixel Block)
                         Rectangle()
                             .fill(Color.red)
                             .frame(width: cellSize - 2, height: cellSize - 2)
                             .offset(x: food.x * cellSize + 1, y: food.y * cellSize + 1)
                         
-                        // SNAKE BODY SECTIONS
+                        // MARK: SNAKE SECTIONS
                         ForEach(0..<snake.count, id: \.self) { index in
-                            Rectangle()
-                                .fill(Color.green)
-                                .frame(width: cellSize - 2, height: cellSize - 2)
-                                .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
+                            let isHead = (index == 0)
+                            
+                            if isHead {
+                                // Dynamic Head Block with an Orientation Arrow
+                                Rectangle()
+                                    .fill(Color.green)
+                                    .frame(width: cellSize - 2, height: cellSize - 2)
+                                    .overlay(
+                                        Image(systemName: "triangle.fill")
+                                            .font(.system(size: cellSize * 0.5))
+                                            .foregroundColor(.black)
+                                            .rotationEffect(headRotation)
+                                    )
+                                    .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
+                            } else {
+                                // Body Blocks
+                                Rectangle()
+                                    .fill(Color.green.opacity(0.85))
+                                    .frame(width: cellSize - 2, height: cellSize - 2)
+                                    .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
+                            }
                         }
                         
                         // FRONT LAYER: The Integrated Start Screen Overlay
                         if !hasStarted {
                             ZStack {
-                                    Color.black.opacity(0.9)
-                                    
-                                    VStack(spacing: 12) {
-                                        Text("S N A K E")
-                                            .font(.system(.title, design: .monospaced))
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.yellow)
-                                        Text("TAP TO START")
-                                            .font(.system(.caption, design: .monospaced))
-                                            .foregroundColor(.white)
-                                            .opacity(0.8)
-                                    }
+                                Color.black.opacity(0.9)
+                                
+                                VStack(spacing: 12) {
+                                    Text("S N A K E")
+                                        .font(.system(.title, design: .monospaced))
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.yellow)
+                                    Text("TAP TO START")
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.white)
+                                        .opacity(0.8)
                                 }
-                                .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
                             }
+                            .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
+                        }
+                        
+                        // 📺 CRT SCANLINE OVERLAY: Locked safely inside the screen bounds stack
+                        ScanlineView()
+                            .allowsHitTesting(false)
                     }
                     .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // ✂️ Cleanly clips backgrounds, rectangles, text overlays, and scanlines together!
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .onTapGesture {
                         if !hasStarted {
                             hasStarted = true
@@ -106,12 +144,10 @@ struct SnakeGameView: View {
                 
                 Spacer()
                 
-                // 🎮 RETRO CONSOLE GAME PAD UPGRADE
+                // 🎮 RETRO CONSOLE GAME PAD
                 HStack(alignment: .center) {
-                    
                     // LEFT SIDE: Physical D-Pad Cross Layout
                     VStack(spacing: 2) {
-                        // UP BUTTON
                         Button(action: { if direction != .down { direction = .up } }) {
                             Text("▲")
                                 .font(.system(.title3, design: .monospaced))
@@ -121,8 +157,7 @@ struct SnakeGameView: View {
                                 .cornerRadius(6)
                         }
                         
-                        HStack(spacing: 46) { // Leaves space perfectly for the cross center
-                            // LEFT BUTTON
+                        HStack(spacing: 46) {
                             Button(action: { if direction != .right { direction = .left } }) {
                                 Text("◀")
                                     .font(.system(.title3, design: .monospaced))
@@ -132,7 +167,6 @@ struct SnakeGameView: View {
                                     .cornerRadius(6)
                             }
                             
-                            // RIGHT BUTTON
                             Button(action: { if direction != .left { direction = .right } }) {
                                 Text("▶")
                                     .font(.system(.title3, design: .monospaced))
@@ -143,7 +177,6 @@ struct SnakeGameView: View {
                             }
                         }
                         
-                        // DOWN BUTTON
                         Button(action: { if direction != .up { direction = .down } }) {
                             Text("▼")
                                 .font(.system(.title3, design: .monospaced))
@@ -161,45 +194,33 @@ struct SnakeGameView: View {
                     
                     Spacer()
                     
-                    // RIGHT SIDE: Angled Game Boy Style Action Buttons
+                    // RIGHT SIDE: Angled Action Buttons
                     HStack(spacing: 24) {
-                        // B BUTTON
                         Button(action: { /* Future Turbo Action */ }) {
-                            VStack(spacing: 8) {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 50, height: 50)
-                                    .shadow(color: .black.opacity(0.6), radius: 2, x: 2, y: 3)
-                                    .overlay(
-                                        Text("B")
-                                            .font(.system(.body, design: .monospaced))
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.white)
-                                    )
-                                //Text("TURBO")
-                                //  .font(.system(.caption2, design: .monospaced))
-                                //.foregroundColor(.gray)
-                            }
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 50, height: 50)
+                                .shadow(color: .black.opacity(0.6), radius: 2, x: 2, y: 3)
+                                .overlay(
+                                    Text("B")
+                                        .font(.system(.body, design: .monospaced))
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                )
                         }
                         .offset(y: 12)
                         
-                        // A BUTTON
                         Button(action: { /* Future Primary Action */ }) {
-                            VStack(spacing: 8) {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 50, height: 50)
-                                    .shadow(color: .black.opacity(0.6), radius: 2, x: 2, y: 3)
-                                    .overlay(
-                                        Text("A")
-                                            .font(.system(.body, design: .monospaced))
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.white)
-                                    )
-                                //Text("ACTION")
-                                //    .font(.system(.caption2, design: .monospaced))
-                                //    .foregroundColor(.gray)
-                            }
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 50, height: 50)
+                                .shadow(color: .black.opacity(0.6), radius: 2, x: 2, y: 3)
+                                .overlay(
+                                    Text("A")
+                                        .font(.system(.body, design: .monospaced))
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                )
                         }
                     }
                     .padding(.trailing, 15)
@@ -208,25 +229,20 @@ struct SnakeGameView: View {
                 .padding(.bottom, 25)
             }
         }
-        // Unified timers and alerts managed at the global view hierarchy root
         .onReceive(timer) { _ in
             if hasStarted && !isGameOver {
                 moveSnake()
             }
         }
         .alert("GAME OVER", isPresented: $isGameOver) {
-            Button("Retry") {
-                resetGame()
-            }
-            Button("Exit", role: .cancel) {
-                dismiss()
-            }
+            Button("Retry") { resetGame() }
+            Button("Exit", role: .cancel) { dismiss() }
         } message: {
             Text("Final Score: \(score)")
         }
     }
     
-    //MARK: - GAME MECHS
+    // MARK: - GAME MECHS
     func moveSnake() {
         guard let head = snake.first else { return }
         var newHead = head
@@ -238,16 +254,12 @@ struct SnakeGameView: View {
         case .right: newHead.x += 1
         }
         
-        print("Snake Head Position -> X: \(newHead.x), Y: \(newHead.y)")
-        
         if newHead.x < 0 || newHead.x >= CGFloat(columns) || newHead.y < 0 || newHead.y >= CGFloat(rows) {
-            print("wall detected at X: \(newHead.x), Y: \(newHead.y).")
             isGameOver = true
             return
         }
         
         if snake.contains(newHead) {
-            print("Snake bit itself")
             isGameOver = true
             return
         }

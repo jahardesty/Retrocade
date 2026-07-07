@@ -9,46 +9,64 @@ import SwiftUI
 
 // MARK: - MAIN ENTRY VIEW
 struct ContentView: View {
+    struct Game: Identifiable, Equatable {
+        let id = UUID()
+        let name: String
+    }
+
     @State private var terminalText: String = ""
     @State private var showMenu = false
-    @State private var selectedGame: String? = nil
+    @State private var selectedGame: Game? = nil
     
     let bootLines = [
         "BOOTING RETRO_OS v1.0.7...",
         "LOADING CORE MEMORY....... OK",
         "CONNECTING TO DIAL-UP [56K]... OK",
         "READY.",
-        
     ]
     
     var body: some View {
         ZStack {
+            // Background color for areas outside the simulated terminal frame
             Color.black.ignoresSafeArea()
             
-            ScanlineView()
-            
-            VStack(alignment: .leading, spacing: 10) {
-                if !showMenu {
-                    Text(terminalText)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(.green)
-                        .padding()
-                        .onAppear {
-                            simulateBootSequence()
-                        }
-                } else {
-                    TerminalMenuView(selectedGame: $selectedGame)
+            ZStack {
+                // TERMINAL DISPLAY BACKGROUND
+                Color.black
+                
+                // TERMINAL CONSOLE LINES
+                ScanlineView()
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    if !showMenu {
+                        Text(terminalText)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.green)
+                            .padding()
+                            .onAppear {
+                                simulateBootSequence()
+                            }
+                    } else {
+                        TerminalMenuView(selectedGame: $selectedGame)
+                    }
+                    Spacer()
                 }
-                Spacer()
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // ✂️ Cleanly locks the boot sequence text, menu list, and scanlines inside a uniform rounded CRT screen box
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.green.opacity(0.15), lineWidth: 1)
+            )
+            .padding() // Adds space around the console monitor edge so it floats on the screen
         }
         .sheet(item: $selectedGame) { game in
-            if game == "Snake" {
-                SnakeGameView(gameName: game)
+            if game.name == "Snake" {
+                SnakeGameView(gameName: game.name)
             } else {
-                Text("Loading \(game)...")
+                Text("Loading \(game.name)...")
             }
         }
     }
@@ -71,7 +89,7 @@ struct ContentView: View {
 
 // MARK: - MENU VIEW
 struct TerminalMenuView: View {
-    @Binding var selectedGame: String?
+    @Binding var selectedGame: ContentView.Game?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -84,12 +102,11 @@ struct TerminalMenuView: View {
                 .font(.system(.body, design: .monospaced))
                 .foregroundColor(.green)
             
-            Button(action: { selectedGame = "Snake" }) {
-                Text(" Snake ")
+            Button(action: { selectedGame = ContentView.Game(name: "Snake") }) {
+                Text(" > Snake ")
                     .font(.system(.body, design: .monospaced))
                     .foregroundColor(.yellow)
             }
-            
         }
         .padding(.top, 20)
     }
@@ -110,9 +127,4 @@ struct ScanlineView: View {
         }
         .allowsHitTesting(false)
     }
-}
-
-// MARK: - EXTENSIONS
-extension String: Identifiable {
-    public var id: String { self }
 }
