@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import UIKit
 
 struct SnakeGameView: View {
     let gameName: String
@@ -18,17 +19,22 @@ struct SnakeGameView: View {
     @State private var snake: [CGPoint] = [CGPoint(x: 7, y: 10)]
     @State private var food: CGPoint = CGPoint(x: 3, y: 5)
     @State private var direction: Direction = .up
+    @State private var lastMovedDirection: Direction = .up
+    
     @State private var isGameOver = false
-    @State private var score = 0
     @State private var hasStarted = false
+    @State private var score: Int = 0
+    @State private var highScore: Int = UserDefaults.standard.integer(forKey: "SnakeHighScore")
     
     let timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
+    
+    private let dpadFeedback = UIImpactFeedbackGenerator(style: .rigid)
+    private let actionFeedback = UIImpactFeedbackGenerator(style: .medium)
     
     enum Direction {
         case up, down, left, right
     }
     
-    // Calculates rotation angle for the snake head indicator arrow
     var headRotation: Angle {
         switch direction {
         case .up:    return .degrees(0)
@@ -38,117 +44,145 @@ struct SnakeGameView: View {
         }
     }
     
-    // MARK: DESIGN
     var body: some View {
         ZStack {
-            // GLOBAL BACKGROUND (Pure deep black)
             Color.black.ignoresSafeArea()
             
-            VStack {
-                // TOP HEADER BAR
-                HStack {
-                    Button(action: { dismiss() }) {
-                        Text("EXIT TO TERMINAL")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.gray)
-                            .padding(.bottom, 10)
-                    }
-                    
-                    Text("SCORE: \(score)")
-                    Spacer()
-                    Text("SNAKE")
-                }
-                .font(.system(.headline, design: .monospaced))
-                .foregroundColor(.green)
-                .padding()
-                
-                // GAME ARENA
-                GeometryReader { geometry in
-                    let cellSize = min(geometry.size.width / CGFloat(columns), geometry.size.height / CGFloat(rows))
-                    
-                    ZStack(alignment: .topLeading) {
-                        // BACK LAYER: Black Grid Background with uniform rounded corners
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.black)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.green.opacity(0.3), lineWidth: 2)
-                            )
-                        
-                        // FOOD ITEM (Crimson Pixel Block)
-                        Rectangle()
-                            .fill(Color.red)
-                            .frame(width: cellSize - 2, height: cellSize - 2)
-                            .offset(x: food.x * cellSize + 1, y: food.y * cellSize + 1)
-                        
-                        // MARK: SNAKE SECTIONS
-                        ForEach(0..<snake.count, id: \.self) { index in
-                            let isHead = (index == 0)
-                            
-                            if isHead {
-                                // Dynamic Head Block with an Orientation Arrow
-                                Rectangle()
-                                    .fill(Color.green)
-                                    .frame(width: cellSize - 2, height: cellSize - 2)
-                                    .overlay(
-                                        Image(systemName: "triangle.fill")
-                                            .font(.system(size: cellSize * 0.5))
-                                            .foregroundColor(.black)
-                                            .rotationEffect(headRotation)
-                                    )
-                                    .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
-                            } else {
-                                // Body Blocks
-                                Rectangle()
-                                    .fill(Color.green.opacity(0.85))
-                                    .frame(width: cellSize - 2, height: cellSize - 2)
-                                    .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
-                            }
+            VStack(spacing: 0) {
+                // MARK: - TERMINAL HUD DISPLAY
+                HStack(alignment: .center) {
+                    HStack(spacing: 16) {
+                        HStack(spacing: 4) {
+                            Text("SCORE:")
+                                .foregroundColor(.green.opacity(0.6))
+                            Text(String(format: "%04d", score))
+                                .foregroundColor(.green)
+                                .bold()
                         }
                         
-                        // FRONT LAYER: The Integrated Start Screen Overlay
-                        if !hasStarted {
-                            ZStack {
-                                Color.black.opacity(0.9)
+                        HStack(spacing: 4) {
+                            Text("HI:")
+                                .foregroundColor(.green.opacity(0.6))
+                            Text(String(format: "%04d", highScore))
+                                .foregroundColor(.yellow)
+                                .bold()
+                        }
+                    }
+                    .font(.system(.subheadline, design: .monospaced))
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        actionFeedback.impactOccurred()
+                        dismiss()
+                    }) {
+                        Text("[ESC_EXIT]")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.red.opacity(0.85))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color.red.opacity(0.4), lineWidth: 1)
+                            )
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.green.opacity(0.04))
+                
+                // MARK: - GAME ARENA BOX
+                // GeometryReader is safely isolated inside this container now
+                ZStack {
+                    GeometryReader { geometry in
+                        let cellSize = min(geometry.size.width / CGFloat(columns), geometry.size.height / CGFloat(rows))
+                        
+                        ZStack(alignment: .topLeading) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.black)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(Color.green.opacity(0.3), lineWidth: 2)
+                                )
+                            
+                            // FOOD ITEM
+                            Rectangle()
+                                .fill(Color.red)
+                                .frame(width: cellSize - 2, height: cellSize - 2)
+                                .offset(x: food.x * cellSize + 1, y: food.y * cellSize + 1)
+                            
+                            // SNAKE SECTIONS
+                            ForEach(0..<snake.count, id: \.self) { index in
+                                let isHead = (index == 0)
+                                let isTail = (index == snake.count - 1) && (snake.count > 1)
                                 
-                                VStack(spacing: 12) {
-                                    Text("S N A K E")
-                                        .font(.system(.title, design: .monospaced))
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.yellow)
-                                    Text("TAP TO START")
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundColor(.white)
-                                        .opacity(0.8)
+                                if isHead {
+                                    Rectangle()
+                                        .fill(Color.green)
+                                        .frame(width: cellSize - 2, height: cellSize - 2)
+                                        .overlay(
+                                            Image(systemName: "triangle.fill")
+                                                .font(.system(size: cellSize * 0.5))
+                                                .foregroundColor(.black)
+                                                .rotationEffect(headRotation)
+                                        )
+                                        .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
+                                } else if isTail {
+                                    Rectangle()
+                                        .fill(Color.yellow.opacity(0.85))
+                                        .frame(width: cellSize - 2, height: cellSize - 2)
+                                        .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
+                                } else {
+                                    Rectangle()
+                                        .fill(Color.green.opacity(0.85))
+                                        .frame(width: cellSize - 2, height: cellSize - 2)
+                                        .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
                                 }
                             }
-                            .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
+                            
+                            if !hasStarted {
+                                ZStack {
+                                    Color.black.opacity(0.9)
+                                    
+                                    VStack(spacing: 12) {
+                                        Text("S N A K E")
+                                            .font(.system(.title, design: .monospaced))
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.yellow)
+                                        Text("TAP TO START")
+                                            .font(.system(.caption, design: .monospaced))
+                                            .foregroundColor(.white)
+                                            .opacity(0.8)
+                                    }
+                                }
+                                .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
+                            }
+                            
+                            ScanlineView()
+                                .allowsHitTesting(false)
                         }
-                        
-                        // 📺 CRT SCANLINE OVERLAY: Locked safely inside the screen bounds stack
-                        ScanlineView()
-                            .allowsHitTesting(false)
-                    }
-                    .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
-                    // ✂️ Cleanly clips backgrounds, rectangles, text overlays, and scanlines together!
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .onTapGesture {
-                        if !hasStarted {
-                            hasStarted = true
-                        }
+                        // Center the grid inside the reader
+                        .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     }
                 }
                 .padding()
+                .onTapGesture {
+                    if !hasStarted {
+                        dpadFeedback.prepare()
+                        actionFeedback.prepare()
+                        hasStarted = true
+                    }
+                }
                 
                 Spacer()
                 
-                // 🎮 RETRO CONSOLE GAME PAD
+                // MARK: - GAME CONTROLS
                 HStack(alignment: .center) {
-                    // LEFT SIDE: Physical D-Pad Cross Layout
+                    // D-PAD
                     VStack(spacing: 2) {
-                        Button(action: { if direction != .down { direction = .up } }) {
+                        Button(action: { if lastMovedDirection != .down { direction = .up; dpadFeedback.impactOccurred() } }) {
                             Text("▲")
                                 .font(.system(.title3, design: .monospaced))
                                 .foregroundColor(.black)
@@ -158,7 +192,7 @@ struct SnakeGameView: View {
                         }
                         
                         HStack(spacing: 46) {
-                            Button(action: { if direction != .right { direction = .left } }) {
+                            Button(action: { if lastMovedDirection != .right { direction = .left; dpadFeedback.impactOccurred() } }) {
                                 Text("◀")
                                     .font(.system(.title3, design: .monospaced))
                                     .foregroundColor(.black)
@@ -167,7 +201,7 @@ struct SnakeGameView: View {
                                     .cornerRadius(6)
                             }
                             
-                            Button(action: { if direction != .left { direction = .right } }) {
+                            Button(action: { if lastMovedDirection != .left { direction = .right; dpadFeedback.impactOccurred() } }) {
                                 Text("▶")
                                     .font(.system(.title3, design: .monospaced))
                                     .foregroundColor(.black)
@@ -177,7 +211,7 @@ struct SnakeGameView: View {
                             }
                         }
                         
-                        Button(action: { if direction != .up { direction = .down } }) {
+                        Button(action: { if lastMovedDirection != .up { direction = .down; dpadFeedback.impactOccurred() } }) {
                             Text("▼")
                                 .font(.system(.title3, design: .monospaced))
                                 .foregroundColor(.black)
@@ -186,17 +220,12 @@ struct SnakeGameView: View {
                                 .cornerRadius(6)
                         }
                     }
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.yellow.opacity(0.2))
-                            .frame(width: 46, height: 46)
-                    )
                     
                     Spacer()
                     
-                    // RIGHT SIDE: Angled Action Buttons
+                    // ACTION BUTTONS
                     HStack(spacing: 24) {
-                        Button(action: { /* Future Turbo Action */ }) {
+                        Button(action: { actionFeedback.impactOccurred() }) {
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 50, height: 50)
@@ -210,7 +239,7 @@ struct SnakeGameView: View {
                         }
                         .offset(y: 12)
                         
-                        Button(action: { /* Future Primary Action */ }) {
+                        Button(action: { actionFeedback.impactOccurred() }) {
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 50, height: 50)
@@ -226,19 +255,19 @@ struct SnakeGameView: View {
                     .padding(.trailing, 15)
                 }
                 .padding(.horizontal, 25)
-                .padding(.bottom, 25)
+                .padding(.bottom, 35) // Added breathing room for home indicator
             }
-        }
-        .onReceive(timer) { _ in
-            if hasStarted && !isGameOver {
-                moveSnake()
+            .onReceive(timer) { _ in
+                if hasStarted && !isGameOver {
+                    moveSnake()
+                }
             }
-        }
-        .alert("GAME OVER", isPresented: $isGameOver) {
-            Button("Retry") { resetGame() }
-            Button("Exit", role: .cancel) { dismiss() }
-        } message: {
-            Text("Final Score: \(score)")
+            .alert("GAME OVER", isPresented: $isGameOver) {
+                Button("Retry") { resetGame() }
+                Button("Exit", role: .cancel) { dismiss() }
+            } message: {
+                Text("Final Score: \(score)")
+            }
         }
     }
     
@@ -246,6 +275,8 @@ struct SnakeGameView: View {
     func moveSnake() {
         guard let head = snake.first else { return }
         var newHead = head
+        
+        lastMovedDirection = direction
         
         switch direction {
         case .up: newHead.y -= 1
@@ -255,11 +286,13 @@ struct SnakeGameView: View {
         }
         
         if newHead.x < 0 || newHead.x >= CGFloat(columns) || newHead.y < 0 || newHead.y >= CGFloat(rows) {
+            updateHighScore()
             isGameOver = true
             return
         }
         
         if snake.contains(newHead) {
+            updateHighScore()
             isGameOver = true
             return
         }
@@ -271,6 +304,13 @@ struct SnakeGameView: View {
             generateNewFood()
         } else {
             snake.removeLast()
+        }
+    }
+ // MARK: HELPER METHODS
+    func updateHighScore() {
+        if score > highScore {
+            highScore = score
+            UserDefaults.standard.set(highScore, forKey: "SnakeHighScore")
         }
     }
     
@@ -290,6 +330,7 @@ struct SnakeGameView: View {
     func resetGame() {
         snake = [CGPoint(x: 7, y: 10)]
         direction = .up
+        lastMovedDirection = .up
         score = 0
         generateNewFood()
         isGameOver = false
