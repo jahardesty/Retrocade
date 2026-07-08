@@ -21,8 +21,9 @@ struct ContentView: View {
     let bootLines = [
         "BOOTING RETRO_OS v1.0.7...",
         "LOADING CORE MEMORY....... OK",
-        "CONNECTING TO DIAL-UP [56K]... OK",
-        "READY.",
+        "CONNECTING TO MOONBASE... OK",
+        "INSERT QUARTER",
+        "LOADING MENU"
     ]
     
     var body: some View {
@@ -73,13 +74,13 @@ struct ContentView: View {
     
     func simulateBootSequence() {
         var currentLine = 0
-        Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { timer in
+        Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { timer in
             if currentLine < bootLines.count {
                 terminalText += bootLines[currentLine] + "\n"
                 currentLine += 1
             } else {
                 timer.invalidate()
-                withAnimation(.easeIn(duration: 0.5)) {
+                withAnimation(.easeIn(duration: 0.3)) {
                     showMenu = true
                 }
             }

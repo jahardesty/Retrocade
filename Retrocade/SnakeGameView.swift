@@ -9,6 +9,11 @@ import SwiftUI
 import Combine
 import UIKit
 
+struct SnakeSegment: Identifiable {
+    let id = UUID()
+    var position: CGPoint
+}
+
 struct SnakeGameView: View {
     let gameName: String
     @Environment(\.dismiss) var dismiss
@@ -16,8 +21,9 @@ struct SnakeGameView: View {
     let columns = 15
     let rows = 20
     
-    @State private var snake: [CGPoint] = [CGPoint(x: 7, y: 10)]
+    @State private var snake: [SnakeSegment] = [SnakeSegment(position: CGPoint(x: 7, y: 10))]
     @State private var food: CGPoint = CGPoint(x: 3, y: 5)
+    @State private var superFood: CGPoint? = nil
     @State private var direction: Direction = .up
     @State private var lastMovedDirection: Direction = .up
     
@@ -92,7 +98,6 @@ struct SnakeGameView: View {
                 .background(Color.green.opacity(0.04))
                 
                 // MARK: - GAME ARENA BOX
-                // GeometryReader is safely isolated inside this container now
                 ZStack {
                     GeometryReader { geometry in
                         let cellSize = min(geometry.size.width / CGFloat(columns), geometry.size.height / CGFloat(rows))
@@ -111,10 +116,17 @@ struct SnakeGameView: View {
                                 .frame(width: cellSize - 2, height: cellSize - 2)
                                 .offset(x: food.x * cellSize + 1, y: food.y * cellSize + 1)
                             
-                            // SNAKE SECTIONS
-                            ForEach(0..<snake.count, id: \.self) { index in
-                                let isHead = (index == 0)
-                                let isTail = (index == snake.count - 1) && (snake.count > 1)
+                            if let superFoodLocation = superFood {
+                                Rectangle()
+                                    .fill(Color.blue)
+                                    .frame(width: cellSize - 2, height: cellSize - 2)
+                                    .offset(x: superFoodLocation.x * cellSize + 1, y: superFoodLocation.y * cellSize + 1)
+                            }
+                            
+                            //MARK: SNAKE SECTIONS
+                            ForEach(snake) { segment in
+                                let isHead = (segment.id == snake.first?.id)
+                                let isTail = (segment.id == snake.last?.id) && (snake.count > 1)
                                 
                                 if isHead {
                                     Rectangle()
@@ -126,17 +138,17 @@ struct SnakeGameView: View {
                                                 .foregroundColor(.black)
                                                 .rotationEffect(headRotation)
                                         )
-                                        .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
+                                        .offset(x: segment.position.x * cellSize + 1, y: segment.position.y * cellSize + 1)
                                 } else if isTail {
                                     Rectangle()
                                         .fill(Color.yellow.opacity(0.85))
                                         .frame(width: cellSize - 2, height: cellSize - 2)
-                                        .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
+                                        .offset(x: segment.position.x * cellSize + 1, y: segment.position.y * cellSize + 1)
                                 } else {
                                     Rectangle()
                                         .fill(Color.green.opacity(0.85))
                                         .frame(width: cellSize - 2, height: cellSize - 2)
-                                        .offset(x: snake[index].x * cellSize + 1, y: snake[index].y * cellSize + 1)
+                                        .offset(x: segment.position.x * cellSize + 1, y: segment.position.y * cellSize + 1)
                                 }
                             }
                             
@@ -149,7 +161,7 @@ struct SnakeGameView: View {
                                             .font(.system(.title, design: .monospaced))
                                             .fontWeight(.bold)
                                             .foregroundColor(.yellow)
-                                        Text("TAP TO START")
+                                        Text("TAP SCREEN OR [A] TO START")
                                             .font(.system(.caption, design: .monospaced))
                                             .foregroundColor(.white)
                                             .opacity(0.8)
@@ -158,10 +170,10 @@ struct SnakeGameView: View {
                                 .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
                             }
                             
-                            ScanlineView()
+                            // Visual Placeholder or implementation for your Scanlines
+                            Color.clear // Replace with ScanlineView() if it exists in your project
                                 .allowsHitTesting(false)
                         }
-                        // Center the grid inside the reader
                         .frame(width: cellSize * CGFloat(columns), height: cellSize * CGFloat(rows))
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -169,16 +181,12 @@ struct SnakeGameView: View {
                 }
                 .padding()
                 .onTapGesture {
-                    if !hasStarted {
-                        dpadFeedback.prepare()
-                        actionFeedback.prepare()
-                        hasStarted = true
-                    }
+                    triggerGameStart()
                 }
                 
                 Spacer()
                 
-                // MARK: - GAME CONTROLS
+                // MARK: - CONTROLLER CONTROLS
                 HStack(alignment: .center) {
                     // D-PAD
                     VStack(spacing: 2) {
@@ -239,7 +247,10 @@ struct SnakeGameView: View {
                         }
                         .offset(y: 12)
                         
-                        Button(action: { actionFeedback.impactOccurred() }) {
+                        Button(action: {
+                            actionFeedback.impactOccurred()
+                            triggerGameStart()
+                        }) {
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 50, height: 50)
@@ -255,7 +266,7 @@ struct SnakeGameView: View {
                     .padding(.trailing, 15)
                 }
                 .padding(.horizontal, 25)
-                .padding(.bottom, 35) // Added breathing room for home indicator
+                .padding(.bottom, 35)
             }
             .onReceive(timer) { _ in
                 if hasStarted && !isGameOver {
@@ -272,41 +283,71 @@ struct SnakeGameView: View {
     }
     
     // MARK: - GAME MECHS
+    func triggerGameStart() {
+        if !hasStarted {
+            dpadFeedback.prepare()
+            actionFeedback.prepare()
+            hasStarted = true
+        }
+    }
+    
     func moveSnake() {
         guard let head = snake.first else { return }
-        var newHead = head
+        var newHeadPosition = head.position
         
         lastMovedDirection = direction
         
         switch direction {
-        case .up: newHead.y -= 1
-        case .down: newHead.y += 1
-        case .left: newHead.x -= 1
-        case .right: newHead.x += 1
+        case .up: newHeadPosition.y -= 1
+        case .down: newHeadPosition.y += 1
+        case .left: newHeadPosition.x -= 1
+        case .right: newHeadPosition.x += 1
         }
         
-        if newHead.x < 0 || newHead.x >= CGFloat(columns) || newHead.y < 0 || newHead.y >= CGFloat(rows) {
+        // Arena wall check
+        if newHeadPosition.x < 0 || newHeadPosition.x >= CGFloat(columns) || newHeadPosition.y < 0 || newHeadPosition.y >= CGFloat(rows) {
             updateHighScore()
             isGameOver = true
             return
         }
         
-        if snake.contains(newHead) {
+        // Self collision check
+        if snake.contains(where: { $0.position == newHeadPosition }) {
             updateHighScore()
             isGameOver = true
             return
         }
         
-        snake.insert(newHead, at: 0)
+        // Insert new segment
+        snake.insert(SnakeSegment(position: newHeadPosition), at: 0)
         
-        if newHead == food {
+        // Check Food Consumption
+        if newHeadPosition == food {
             score += 10
             generateNewFood()
+            if [100, 300, 600, 1000].contains(score) {
+                generateSuperFood()
+            }
+        } else if let superFoodLocation = superFood, newHeadPosition == superFoodLocation {
+            switch score {
+            case 100: score += 20
+            case 300: score += 40
+            case 600: score += 60
+            case 1000: score += 100
+            default: score += 20
+            }
+            
+            superFood = nil
+            if snake.count > 2 {
+                let tail = snake.last!
+                snake = [snake[0], tail]
+            }
         } else {
+            // Keep length consistent if food wasn't eaten
             snake.removeLast()
         }
     }
- // MARK: HELPER METHODS
+    
     func updateHighScore() {
         if score > highScore {
             highScore = score
@@ -320,20 +361,34 @@ struct SnakeGameView: View {
             let randomY = CGFloat(Int.random(in: 0..<rows))
             let newFoodLocation = CGPoint(x: randomX, y: randomY)
             
-            if !snake.contains(newFoodLocation) {
+            if !snake.contains(where: { $0.position == newFoodLocation }) {
                 food = newFoodLocation
                 break
             }
         }
     }
     
+    func generateSuperFood() {
+        while true {
+            let randomX = CGFloat(Int.random(in: 0..<columns))
+            let randomY = CGFloat(Int.random(in: 0..<rows))
+            let newSuperFoodLocation = CGPoint(x: randomX, y: randomY)
+            
+            if !snake.contains(where: { $0.position == newSuperFoodLocation }) && superFood == nil {
+                superFood = newSuperFoodLocation
+                break
+            }
+        }
+    }
+    
     func resetGame() {
-        snake = [CGPoint(x: 7, y: 10)]
+        snake = [SnakeSegment(position: CGPoint(x: 7, y: 10))]
         direction = .up
         lastMovedDirection = .up
         score = 0
         generateNewFood()
         isGameOver = false
         hasStarted = false
+        superFood = nil
     }
 }
