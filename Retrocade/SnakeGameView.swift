@@ -31,8 +31,13 @@ struct SnakeGameView: View {
     @State private var hasStarted = false
     @State private var score: Int = 0
     @State private var highScore: Int = UserDefaults.standard.integer(forKey: "SnakeHighScore")
+    @State private var isTurboMode = false
+    @State private var isSlowMode = false
+    @State private var moveInterval: Double = 0.2
+    @State private var speedTimer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
     
     let timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
+    
     
     private let dpadFeedback = UIImpactFeedbackGenerator(style: .rigid)
     private let actionFeedback = UIImpactFeedbackGenerator(style: .medium)
@@ -161,7 +166,13 @@ struct SnakeGameView: View {
                                             .font(.system(.title, design: .monospaced))
                                             .fontWeight(.bold)
                                             .foregroundColor(.yellow)
-                                        Text("TAP SCREEN OR [A] TO START")
+                                        Text("""
+                                            TAP SCREEN OR [A] TO START
+                                            USE ARROW KEYS TO MOVE 
+                                            PRESS [A] TO SPEED UP
+                                            PRESS [B] TO SLOW DOWN")
+                                            """)
+                                        .multilineTextAlignment(.center)
                                             .font(.system(.caption, design: .monospaced))
                                             .foregroundColor(.white)
                                             .opacity(0.8)
@@ -233,7 +244,9 @@ struct SnakeGameView: View {
                     
                     // ACTION BUTTONS
                     HStack(spacing: 24) {
-                        Button(action: { actionFeedback.impactOccurred() }) {
+                        Button(action: { actionFeedback.impactOccurred()
+                            toggleSlowSpeed()
+                        }) {
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 50, height: 50)
@@ -249,7 +262,11 @@ struct SnakeGameView: View {
                         
                         Button(action: {
                             actionFeedback.impactOccurred()
-                            triggerGameStart()
+                            if !hasStarted {
+                                triggerGameStart()
+                            } else {
+                                toggleTurboSpeed()
+                            }
                         }) {
                             Circle()
                                 .fill(Color.red)
@@ -268,17 +285,81 @@ struct SnakeGameView: View {
                 .padding(.horizontal, 25)
                 .padding(.bottom, 35)
             }
-            .onReceive(timer) { _ in
+            .onReceive(speedTimer) { _ in
                 if hasStarted && !isGameOver {
                     moveSnake()
                 }
             }
-            .alert("GAME OVER", isPresented: $isGameOver) {
-                Button("Retry") { resetGame() }
-                Button("Exit", role: .cancel) { dismiss() }
-            } message: {
-                Text("Final Score: \(score)")
+            if isGameOver {
+                ZStack {
+                    // Dimmed retro background overlay
+                    Color.black.opacity(0.85)
+                        .ignoresSafeArea()
+                    
+                    // Custom Pleasing Terminal Card
+                    VStack(spacing: 20) {
+                        Text("GAME OVER")
+                            .font(.system(.title, design: .monospaced))
+                            .fontWeight(.black)
+                            .foregroundColor(.red)
+                            .shadow(color: .yellow.opacity(0.4), radius: 4)
+                        
+                        VStack(spacing: 4) {
+                            Text("FINAL SCORE")
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundColor(.green.opacity(0.6))
+                            Text(String(format: "%04d", score))
+                                .font(.system(.title2, design: .monospaced))
+                                .bold()
+                                .foregroundColor(.green)
+                        }
+                        .padding(.vertical, 8)
+                        
+                        // Retro Styled Buttons
+                        HStack(spacing: 16) {
+                            Button(action: {
+                                resetGame()
+                            }) {
+                                Text("RETRY")
+                                    .font(.system(.body, design: .monospaced))
+                                    .bold()
+                                    .foregroundColor(.black)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .background(Color.yellow)
+                                    .cornerRadius(8)
+                            }
+                            
+                            Button(action: {
+                                dismiss()
+                            }) {
+                                Text("EXIT")
+                                    .font(.system(.body, design: .monospaced))
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.red.opacity(0.6), lineWidth: 1)
+                                    )
+                            }
+                        }
+                    }
+                    .padding(30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(white: 0.08)) // Dark charcoal gray card
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.green.opacity(0.2), lineWidth: 2)
+                    )
+                    .padding(.horizontal, 40)
+                }
+                // Smooth fade-in animation
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
+            
         }
     }
     
@@ -347,6 +428,20 @@ struct SnakeGameView: View {
             snake.removeLast()
         }
     }
+
+    //MARK: HELPER METHODS
+    
+    func toggleTurboSpeed() {
+        isTurboMode.toggle()
+        moveInterval = isTurboMode ? 0.1 : 0.2
+        speedTimer = Timer.publish(every: moveInterval, on: .main, in: .common).autoconnect()
+    }
+    
+    func toggleSlowSpeed() {
+        isSlowMode.toggle()
+        moveInterval = isSlowMode ? 0.3 : 0.2
+        speedTimer = Timer.publish(every: moveInterval, on: .main, in: .common).autoconnect()
+    }
     
     func updateHighScore() {
         if score > highScore {
@@ -390,5 +485,8 @@ struct SnakeGameView: View {
         isGameOver = false
         hasStarted = false
         superFood = nil
+        isTurboMode = false
+        moveInterval = 0.2
+        speedTimer = Timer.publish(every: moveInterval, on: .main, in: .common).autoconnect()
     }
 }
